@@ -1587,8 +1587,15 @@ namespace visage {
   }
 
   void WindowMac::resetBackingScale() {
-    if (window_handle_)
-      setDpiScale([window_handle_ backingScaleFactor]);
+    if (!window_handle_)
+      return;
+
+    const float old_scale = dpiScale();
+    setDpiScale([window_handle_ backingScaleFactor]);
+    if (view_ && dpiScale() != old_scale) {
+      const CGSize size = view_.frame.size;
+      handleResized(std::round(size.width * dpiScale()), std::round(size.height * dpiScale()));
+    }
   }
 
   void WindowMac::windowContentsResized(int width, int height) {
