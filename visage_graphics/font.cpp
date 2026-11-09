@@ -452,8 +452,8 @@ namespace visage {
         packed_glyph = packedGlyph(character);
 
       quads[i].packed_glyph = packed_glyph;
-      quads[i].x = pen_x + packed_glyph->x_offset;
-      quads[i].y = pen_y - packed_glyph->y_offset;
+      quads[i].x = std::round(pen_x) + packed_glyph->x_offset;
+      quads[i].y = std::round(pen_y) - packed_glyph->y_offset;
       quads[i].width = packed_glyph->width;
       quads[i].height = packed_glyph->height;
 
