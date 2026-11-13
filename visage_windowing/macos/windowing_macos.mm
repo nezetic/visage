@@ -521,6 +521,9 @@ static constexpr double kInitialRenderTime = 0.004;
 static constexpr int kRenderTimeSamples = 16;
 static constexpr double kDrawDeadlineMargin = 0.0015;
 static constexpr double kMaxDrawLead = 0.6;
+static constexpr int kStarvedImmediateFrames = 60;
+static constexpr int kMaxStarvedImmediateFrames = 1200;
+static constexpr double kStarvedResetTime = 2.0;
 
 @implementation VisageAppViewDelegate
 - (instancetype)initWithWindow:(visage::WindowMac*)window {
@@ -587,6 +590,10 @@ static constexpr double kMaxDrawLead = 0.6;
 @implementation VisageAppView {
   CFTimeInterval render_times_[kRenderTimeSamples];
   int render_time_index_;
+  bool draw_pending_;
+  int immediate_frames_;
+  int starved_frames_;
+  CFTimeInterval immediate_end_time_;
 }
 
 - (instancetype)initWithFrame:(NSRect)frame_rect inWindow:(visage::WindowMac*)window {
@@ -1177,10 +1184,22 @@ static constexpr double kMaxDrawLead = 0.6;
   CFTimeInterval lead = std::min(self.render_time + kDrawDeadlineMargin, kMaxDrawLead * period);
   CFTimeInterval delay = link.targetTimestamp - lead - CACurrentMediaTime();
   self.frame_target_time = link.targetTimestamp;
-  if (delay <= 0.0) {
+  if (draw_pending_) {
+    bool again = CACurrentMediaTime() - immediate_end_time_ < kStarvedResetTime;
+    starved_frames_ = again ? std::min(2 * starved_frames_, kMaxStarvedImmediateFrames)
+                            : kStarvedImmediateFrames;
+    immediate_frames_ = starved_frames_;
+  }
+  if (delay <= 0.0 || immediate_frames_ > 0) {
+    if (immediate_frames_ > 0 && --immediate_frames_ == 0)
+      immediate_end_time_ = CACurrentMediaTime();
+    if (self.draw_timer)
+      dispatch_source_set_timer(self.draw_timer, DISPATCH_TIME_FOREVER, DISPATCH_TIME_FOREVER, 0);
     [self drawFrame];
     return;
   }
+
+  draw_pending_ = true;
 
   if (self.draw_timer == nil) {
     VisageAppView* __weak weak_self = self;
@@ -1197,6 +1216,7 @@ static constexpr double kMaxDrawLead = 0.6;
 #endif
 
 - (void)drawFrame {
+  draw_pending_ = false;
   [self draw];
   self.frame_target_time = 0.0;
 }
